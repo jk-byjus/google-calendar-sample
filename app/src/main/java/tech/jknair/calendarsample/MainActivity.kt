@@ -24,8 +24,10 @@ class MainActivity : AppCompatActivity(), ActivityCompat.OnRequestPermissionsRes
 
     private fun calendarTest() {
         val calendarList = getCalendarList(this)
-        insertSampleEvent(this)
-        val eventList = getEventsList(this)
+        val id = calendarList.firstOrNull()?.id
+        Log.w("calendarTest", "primary calendar id ${id}")
+        insertSampleEvent(this, id ?: return)
+        val eventList = getEventsList(this, id)
     }
 
     private fun checkPermissions(callbackId: Int, vararg permissionsIds: String) {
@@ -74,15 +76,26 @@ data class EventRow(
 
 fun getCalendarList(cxt: Context): Set<CalendarRow> {
     val uri = CalendarContract.Calendars.CONTENT_URI
-    val selection = "${CalendarContract.Calendars.ACCOUNT_NAME} = ?"
-    val selectionArgs = arrayOf("emailId")
-    val cursor = cxt.contentResolver.query(
+    val selection = "${CalendarContract.Calendars.VISIBLE} = 1 AND ${CalendarContract.Calendars.IS_PRIMARY} = 1"
+    val contentResolver = cxt.contentResolver
+    var cursor = contentResolver.query(
         uri, arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
             CalendarContract.Calendars.ACCOUNT_NAME
-        ), selection, selectionArgs, null
+        ), selection, null, null
     )
+
+    if(cursor == null || cursor.count == 0) {
+        cursor?.close()
+        cursor = contentResolver.query(
+            uri, arrayOf(
+                CalendarContract.Calendars._ID,
+                CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                CalendarContract.Calendars.ACCOUNT_NAME
+            ), "${CalendarContract.Calendars.VISIBLE} = 1", null, null
+        )
+    }
 
     val calendarRowSet = mutableSetOf<CalendarRow>()
     while (cursor?.moveToNext() == true) {
@@ -101,10 +114,10 @@ fun getCalendarList(cxt: Context): Set<CalendarRow> {
     return calendarRowSet
 }
 
-fun getEventsList(cxt: Context) {
+fun getEventsList(cxt: Context, calendarId: Long) {
     val uri = CalendarContract.Events.CONTENT_URI
-    val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.CALENDAR_ID} == 6"
-    val selectionArgs = arrayOf("${Calendar.getInstance().timeInMillis}")
+    val selection = "${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.CALENDAR_ID} == ?"
+    val selectionArgs = arrayOf("${Calendar.getInstance().timeInMillis}", "$calendarId")
     val contentResolver = cxt.contentResolver
     val cursor = contentResolver.query(
         uri, arrayOf(
@@ -130,18 +143,15 @@ fun getEventsList(cxt: Context) {
 
 // sessionId - sessionid 222 - eventid 212
 
-fun insertSampleEvent(cxt: Context) {
-    //    for (availableID in TimeZone.getAvailableIDs()) {
-//        Log.w("getEventsList", "id: $availableID")
-//    }
+fun insertSampleEvent(cxt: Context, calendarId: Long) {
 
     val insertUri = cxt.contentResolver.insert(CalendarContract.Events.CONTENT_URI, ContentValues().apply {
-        put(CalendarContract.Events.CALENDAR_ID, 6)
+        put(CalendarContract.Events.CALENDAR_ID, calendarId)
         put(CalendarContract.Events.TITLE, "Session Name")
         put(CalendarContract.Events.DESCRIPTION, "sessionId:_lowercase_")
         put(CalendarContract.Events.EVENT_TIMEZONE, "Asia/Kolkata")
-        put(CalendarContract.Events.DTSTART, Calendar.getInstance().timeInMillis + 30 * 60 * 1000)
-        put(CalendarContract.Events.DTEND, Calendar.getInstance().timeInMillis + 60 * 60 * 1000)
+        put(CalendarContract.Events.DTSTART, Calendar.getInstance().timeInMillis + 1 * 60 * 1000)
+        put(CalendarContract.Events.DTEND, Calendar.getInstance().timeInMillis + 31 * 60 * 1000)
     })
 
     Log.w("getEventsList", "insert opr ${insertUri.toString()}")
